@@ -7,7 +7,7 @@ The project converts paired BraTS volumes into cached 2D axial slice pairs, uses
 
 
 <p align="center">
-  <img src="Picture1.png" alt="Example T1n to T2w translation results showing two rows of triplets: input T1n, real T2w, and generated T2w." width="1000">
+  <img src="Picture1.png" alt="Example T1n to T2w translation results showing two rows of triplets: input T1n, real T2w, and generated T2w." width="600">
 </p>
 
 <p align="center">
