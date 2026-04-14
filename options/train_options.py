@@ -1,3 +1,4 @@
+
 from .base_options import BaseOptions
 
 
@@ -30,6 +31,11 @@ class TrainOptions(BaseOptions):
         parser.add_argument('--pool_size', type=int, default=50, help='the size of image buffer that stores previously generated images')
         parser.add_argument('--lr_policy', type=str, default='linear', help='learning rate policy. [linear | step | plateau | cosine]')
         parser.add_argument('--lr_decay_iters', type=int, default=50, help='multiply by a gamma every lr_decay_iters iterations')
+
+        parser.add_argument('--val_freq', type=int, default=1, help='run validation every N epochs')
+        parser.add_argument('--mask_threshold', type=float, default=0.01, help='foreground threshold in [0,1] for validation metrics')
+        parser.add_argument('--early_stop_patience', type=int, default=4, help='stop if validation SSIM does not improve for this many validation checks; <=0 disables')
+        parser.add_argument('--early_stop_min_delta', type=float, default=0.0, help='minimum SSIM improvement required to reset early stopping')
 
         self.isTrain = True
         return parser

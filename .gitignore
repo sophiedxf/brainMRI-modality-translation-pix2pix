@@ -1,3 +1,9 @@
+
+datasets/bratsnpz_100p_93s_60perc/slices_npz/
+datasets/bratsnpz_1251p_30s_20perc/slices_npz/
+checkpoints/
+results/
+
 .DS_Store
 debug*
 datasets/

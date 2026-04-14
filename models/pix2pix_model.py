@@ -1,6 +1,37 @@
 import torch
+import torch.nn.functional as F
 from .base_model import BaseModel
 from . import networks
+
+
+def ssim_torch(x, y, window_size=11, data_range=1.0, eps=1e-8):
+    """
+    Differentiable SSIM for tensors shaped [N, C, H, W].
+    Expects x and y to be in [0, 1].
+    """
+    pad = window_size // 2
+    c1 = (0.01 * data_range) ** 2
+    c2 = (0.03 * data_range) ** 2
+
+    mu_x = F.avg_pool2d(x, kernel_size=window_size, stride=1, padding=pad)
+    mu_y = F.avg_pool2d(y, kernel_size=window_size, stride=1, padding=pad)
+
+    mu_x_sq = mu_x.pow(2)
+    mu_y_sq = mu_y.pow(2)
+    mu_xy = mu_x * mu_y
+
+    sigma_x_sq = F.avg_pool2d(x * x, kernel_size=window_size, stride=1, padding=pad) - mu_x_sq
+    sigma_y_sq = F.avg_pool2d(y * y, kernel_size=window_size, stride=1, padding=pad) - mu_y_sq
+    sigma_xy = F.avg_pool2d(x * y, kernel_size=window_size, stride=1, padding=pad) - mu_xy
+
+    sigma_x_sq = torch.clamp(sigma_x_sq, min=0.0)
+    sigma_y_sq = torch.clamp(sigma_y_sq, min=0.0)
+
+    numerator = (2 * mu_xy + c1) * (2 * sigma_xy + c2)
+    denominator = (mu_x_sq + mu_y_sq + c1) * (sigma_x_sq + sigma_y_sq + c2) + eps
+
+    ssim_map = numerator / denominator
+    return ssim_map.mean()
 
 
 class Pix2PixModel(BaseModel):
@@ -35,6 +66,38 @@ class Pix2PixModel(BaseModel):
             parser.set_defaults(pool_size=0, gan_mode="vanilla")
             parser.add_argument("--lambda_L1", type=float, default=100.0, help="weight for L1 loss")
 
+            # for masked L1 loss
+            parser.add_argument(
+                "--use_masked_l1",
+                action="store_true",
+                help="compute the L1 loss only inside the target foreground mask"
+            )
+            parser.add_argument(
+                "--brain_mask_threshold",
+                type=float,
+                default=-0.99,
+                help="foreground threshold in target image space [-1,1] for masked L1"
+            )
+            ##########################
+
+            parser.add_argument(
+                "--use_ssim_loss",
+                action="store_true",
+                help="add SSIM loss on top of GAN + L1"
+            )
+            parser.add_argument(
+                "--lambda_SSIM",
+                type=float,
+                default=5.0,
+                help="weight for SSIM loss term: lambda_SSIM * (1 - SSIM)"
+            )
+            parser.add_argument(
+                "--ssim_window_size",
+                type=int,
+                default=11,
+                help="window size for SSIM computation"
+            )
+
         return parser
 
     def __init__(self, opt):
@@ -45,7 +108,7 @@ class Pix2PixModel(BaseModel):
         """
         BaseModel.__init__(self, opt)
         # specify the training losses you want to print out. The training/test scripts will call <BaseModel.get_current_losses>
-        self.loss_names = ["G_GAN", "G_L1", "D_real", "D_fake"]
+        self.loss_names = ["G_GAN", "G_L1", "G_SSIM", "D_real", "D_fake"]
         # specify the images you want to save/display. The training/test scripts will call <BaseModel.get_current_visuals>
         self.visual_names = ["real_A", "fake_B", "real_B"]
         # specify the models you want to save to the disk. The training/test scripts will call <BaseModel.save_networks> and <BaseModel.load_networks>
@@ -64,6 +127,9 @@ class Pix2PixModel(BaseModel):
             # define loss functions
             self.criterionGAN = networks.GANLoss(opt.gan_mode).to(self.device)  # move to the device for custom loss
             self.criterionL1 = torch.nn.L1Loss()
+
+            self.loss_G_SSIM = torch.tensor(0.0, device=self.device)
+
             # initialize optimizers; schedulers will be automatically created by function <BaseModel.setup>.
             self.optimizer_G = torch.optim.Adam(self.netG.parameters(), lr=opt.lr, betas=(opt.beta1, 0.999))
             self.optimizer_D = torch.optim.Adam(self.netD.parameters(), lr=opt.lr, betas=(opt.beta1, 0.999))
@@ -82,6 +148,8 @@ class Pix2PixModel(BaseModel):
         self.real_A = input["A" if AtoB else "B"].to(self.device)
         self.real_B = input["B" if AtoB else "A"].to(self.device)
         self.image_paths = input["A_paths" if AtoB else "B_paths"]
+
+        # self.mask = input["mask"].to(self.device)
 
     def forward(self):
         """Run forward pass; called by both functions <optimize_parameters> and <test>."""
@@ -108,9 +176,44 @@ class Pix2PixModel(BaseModel):
         pred_fake = self.netD(fake_AB)
         self.loss_G_GAN = self.criterionGAN(pred_fake, True)
         # Second, G(A) = B
-        self.loss_G_L1 = self.criterionL1(self.fake_B, self.real_B) * self.opt.lambda_L1
+
+        # self.loss_G_L1 = self.criterionL1(self.fake_B, self.real_B) * self.opt.lambda_L1
+
+        # masked L1 loss
+        if getattr(self.opt, "use_masked_l1", False):
+            mask = (self.real_B > self.opt.brain_mask_threshold).float()
+            l1_map = torch.abs(self.fake_B - self.real_B)
+            denom = mask.sum().clamp(min=1.0)
+            self.loss_G_L1 = (l1_map * mask).sum() / denom * self.opt.lambda_L1
+        else:
+            self.loss_G_L1 = self.criterionL1(self.fake_B, self.real_B) * self.opt.lambda_L1
+        #################################################
+
+
+        # Optional SSIM loss
+        if getattr(self.opt, "use_ssim_loss", False):
+            fake_01 = torch.clamp((self.fake_B + 1.0) / 2.0, 0.0, 1.0)
+            real_01 = torch.clamp((self.real_B + 1.0) / 2.0, 0.0, 1.0)
+
+            # Reuse the same foreground mask if masked L1 is enabled
+            if getattr(self.opt, "use_masked_l1", False):
+                mask_01 = (self.real_B > self.opt.brain_mask_threshold).float()
+                fake_01 = fake_01 * mask_01
+                real_01 = real_01 * mask_01
+
+            ssim_val = ssim_torch(
+                fake_01,
+                real_01,
+                window_size=self.opt.ssim_window_size,
+                data_range=1.0
+            )
+            self.loss_G_SSIM = (1.0 - ssim_val) * self.opt.lambda_SSIM
+        else:
+            self.loss_G_SSIM = torch.tensor(0.0, device=self.device)
+
+
         # combine loss and calculate gradients
-        self.loss_G = self.loss_G_GAN + self.loss_G_L1
+        self.loss_G = self.loss_G_GAN + self.loss_G_L1 + self.loss_G_SSIM
         self.loss_G.backward()
 
     def optimize_parameters(self):
