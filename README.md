@@ -1,5 +1,5 @@
 
-# Brain MRI Modality Translation with pix2pix on BraTS2023
+# Brain MRI Modality Translation with the Official pix2pix Framework 
 
 This repository adapts the official pix2pix framework for **paired 2D brain MRI modality translation** on **BraTS2023**, with a primary focus on **T1n → T2w** synthesis.
 
