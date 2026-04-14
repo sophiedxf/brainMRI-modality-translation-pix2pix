@@ -1,7 +1,7 @@
 
 # Brain MRI Modality Translation with pix2pix on BraTS2023
 
-This repository adapts the official **pytorch-CycleGAN-and-pix2pix** framework for **paired 2D brain MRI modality translation** on **BraTS2023**, with a primary focus on **T1n → T2w** synthesis.
+This repository adapts the official pix2pix framework for **paired 2D brain MRI modality translation** on **BraTS2023**, with a primary focus on **T1n → T2w** synthesis.
 
 The project converts paired BraTS volumes into cached 2D axial slice pairs, uses a **patient-level split** to avoid slice leakage, and trains a modified pix2pix model with **foreground-aware reconstruction loss** and an additional **SSIM loss** for improved structural fidelity.
 
