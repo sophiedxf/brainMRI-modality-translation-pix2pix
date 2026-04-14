@@ -3,8 +3,6 @@
 
 This repository adapts the official pix2pix framework for **paired 2D brain MRI modality translation** on **BraTS2023**, with a primary focus on **T1n → T2w** synthesis.
 
-The project converts paired BraTS volumes into cached 2D axial slice pairs, uses a **patient-level split** to avoid slice leakage, and trains a modified pix2pix model with **foreground-aware reconstruction loss** and an additional **SSIM loss** for improved structural fidelity.
-
 
 <p align="center">
   <img src="Picture1.png" alt="Example T1n to T2w translation results showing two rows of triplets: input T1n, real T2w, and generated T2w." width="600">
@@ -15,6 +13,9 @@ The project converts paired BraTS volumes into cached 2D axial slice pairs, uses
     Example paired translation results.
   </em>
 </p>
+
+
+The project converts paired BraTS volumes into cached 2D axial slice pairs, uses a patient-level split to avoid slice leakage, and trains a modified pix2pix model with foreground-aware reconstruction loss and an additional SSIM loss for improved structural fidelity.
 
 
 ---
