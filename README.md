@@ -163,17 +163,25 @@ This project has been developed and tested primarily on:
 - **Environment:** Conda
 - **GPU:** NVIDIA RTX 3080 Ti
 
-Core dependencies include:
+This project was developed with Conda. To recreate the environment:
 
-- PyTorch
-- torchvision
-- numpy
-- scikit-image
-- Pillow
-- nibabel
-- dominate
+```bash
+conda env create -f environment.yml
+conda activate brain_mri_gan
+```
 
-Install packages according to your local environment and script imports.
+If the environment already exists and you want to update it:
+
+```bash
+conda env update -f environment.yml --prune
+conda activate brain_mri_gan
+```
+
+If you prefer `pip`, install the dependencies with:
+
+```bash
+pip install -r requirements.txt
+```
 
 ---
 
